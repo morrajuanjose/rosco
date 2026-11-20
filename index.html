@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosco de asteroides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Layout: un rosco de rocas en órbita a la izquierda, la definición activa a la derecha. */
+  :root {
+    --ink: #0a0c12;
+    --surface: #121622;
+    --line: #262c3d;
+    --text: #e9e6df;
+    --muted: #98a0b4;
+    --amber: #f0a43a;
+    --dust: #c9b79a;
+    --rock: #232837;
+    --rock-line: #4a5268;
+    --glyph: #cfd3df;
+    --ok: #4fd1a1;
+    --ok-bg: #0f342b;
+    --ko: #ec6a52;
+    --ko-bg: #3a1914;
+    --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+    --body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background-color: var(--ink);
+    background-image: radial-gradient(1100px 620px at 12% -8%, #172038 0%, rgba(10,12,18,0) 70%);
+    color: var(--text);
+    font-family: var(--body);
+    line-height: 1.5;
+    min-height: 100%;
+  }
+
+  .app { max-width: 1160px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 28px; }
+
+  header h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(1.7rem, 4.4vw, 2.7rem);
+    line-height: 1.08;
+    margin: 0 0 8px;
+    letter-spacing: .01em;
+    text-wrap: balance;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; text-wrap: pretty; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 620px) minmax(0, 1fr); gap: 36px; align-items: center; }
+  @media (max-width: 920px) { .stage { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+
+  /* Rosco */
+  .wheel { position: relative; width: 100%; max-width: 620px; aspect-ratio: 1; margin-inline: auto; container-type: inline-size; }
+  .wheel svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+  .belt { transform-origin: 320px 320px; animation: orbit 360s linear infinite; }
+  .belt.slow { animation-duration: 520s; animation-direction: reverse; }
+  @keyframes orbit { to { transform: rotate(360deg); } }
+
+  .track { fill: none; stroke: var(--line); stroke-width: 1.2; }
+
+  .rock { fill: var(--rock); stroke: var(--rock-line); stroke-width: 2; stroke-linejoin: round; transition: fill .2s, stroke .2s; }
+  .glyph { font: 700 24px/1 var(--display); fill: var(--glyph); text-anchor: middle; transition: fill .2s; }
+  .node.s-skipped .rock { stroke: var(--amber); stroke-dasharray: 5 3; }
+  .node.s-ok .rock { fill: var(--ok-bg); stroke: var(--ok); }
+  .node.s-ok .glyph { fill: var(--ok); }
+  .node.s-ko .rock { fill: var(--ko-bg); stroke: var(--ko); }
+  .node.s-ko .glyph { fill: var(--ko); }
+  .node.cur { transform: scale(1.12); transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 10px rgba(240,164,58,.6)); }
+  .node.cur .rock { fill: var(--amber); stroke: #ffd89a; stroke-dasharray: none; }
+  .node.cur .glyph { fill: #1b1204; }
+
+  .core { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 0 17%; }
+  .time { font-family: var(--display); font-weight: 700; font-size: clamp(2.6rem, 14cqw, 5.2rem); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .time.low { color: var(--ko); }
+  .coreline { color: var(--muted); font-size: clamp(.8rem, 2.6cqw, 1rem); margin: 0; }
+  .score { font-family: var(--display); font-weight: 700; font-size: clamp(2.2rem, 12cqw, 4.4rem); line-height: 1; }
+  .score small { font-size: .45em; color: var(--muted); font-weight: 600; }
+  .corehead { font-family: var(--display); font-weight: 600; font-size: clamp(1rem, 3.6cqw, 1.4rem); margin: 0; }
+
+  /* Controles */
+  .btn {
+    font: 600 1rem/1 var(--display);
+    letter-spacing: .03em;
+    padding: 13px 20px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--dust); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: #1b1204; }
+  .btn.primary:hover:not(:disabled) { background: #ffb653; border-color: #ffb653; }
+  .btn:focus-visible, .field input:focus-visible { outline: 3px solid #ffd89a; outline-offset: 2px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px; }
+  .card h2 { font-family: var(--display); font-size: 1.15rem; margin: 0 0 12px; }
+  .card[hidden] { display: none; }
+
+  .clue-head { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .clue-letter { font-family: var(--display); font-weight: 700; font-size: 3.6rem; line-height: 1; color: var(--amber); min-width: 1ch; }
+  .clue-mode { color: var(--muted); font-size: .95rem; margin: 0; }
+  .clue-count { color: var(--dust); font-size: .95rem; margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+  .clue-text { font-size: clamp(1.15rem, 2.6vw, 1.45rem); line-height: 1.4; margin: 0 0 22px; text-wrap: pretty; }
+
+  .field { display: flex; flex-wrap: wrap; gap: 10px; }
+  .field input {
+    flex: 1 1 200px; min-width: 0;
+    font: 600 1.1rem/1 var(--display);
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: 14px 16px; border-radius: 10px;
+    border: 1.5px solid var(--line); background: var(--ink); color: var(--text);
+  }
+  .field input::placeholder { text-transform: none; letter-spacing: 0; color: #6b7388; font-family: var(--body); font-weight: 400; }
+  .field input:disabled { opacity: .5; }
+  .fb { min-height: 1.6em; margin: 12px 0 0; font-weight: 600; }
+  .fb.ok { color: var(--ok); }
+  .fb.ko { color: var(--ko); }
+  .fb.skip { color: var(--amber); }
+
+  .tally { display: flex; flex-wrap: wrap; gap: 18px; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .95rem; }
+  .tally span { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  .tally i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .tally .d-ok { background: var(--ok); }
+  .tally .d-ko { background: var(--ko); }
+  .tally .d-pen { background: transparent; border: 2px dashed var(--amber); }
+
+  .rules { margin: 0; padding-left: 1.1em; color: var(--muted); display: grid; gap: 8px; }
+  .rules strong { color: var(--text); font-weight: 600; }
+
+  .answers { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 14px; }
+  .answers li { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border-left: 3px solid var(--rock-line); background: rgba(255,255,255,.02); border-radius: 0 6px 6px 0; }
+  .answers b { font-family: var(--display); font-size: 1.05rem; min-width: 1.1ch; }
+  .answers li.ok { border-left-color: var(--ok); }
+  .answers li.ok b { color: var(--ok); }
+  .answers li.ko { border-left-color: var(--ko); }
+  .answers li.ko b { color: var(--ko); }
+  .answers li.pen { border-left-color: var(--amber); }
+  .answers li.pen b { color: var(--amber); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .belt, .belt.slow { animation: none; }
+    .rock, .glyph { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <h1>Rosco del cinturón de asteroides</h1>
+    <p>Entre las órbitas de Marte y Júpiter giran millones de rocas. Aquí tienes 26 palabras sobre ellas y 150 segundos para encontrarlas.</p>
+  </header>
+
+  <div class="stage">
+    <div class="wheel" id="wheel">
+      <svg id="svg" viewBox="0 0 640 640" role="img" aria-label="Rosco de 26 letras">
+        <defs>
+          <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f0a43a" stop-opacity=".16"/>
+            <stop offset="100%" stop-color="#f0a43a" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="320" cy="320" r="236" fill="url(#sun)"/>
+        <circle class="track" cx="320" cy="320" r="252"/>
+        <g class="belt" id="belt1"></g>
+        <g class="belt slow" id="belt2"></g>
+        <g id="nodes"></g>
+      </svg>
+      <div class="core" id="core"></div>
+    </div>
+
+    <div>
+      <section class="card" id="rules">
+        <h2>Cómo se juega</h2>
+        <ol class="rules">
+          <li>Cada letra tiene una definición. La respuesta <strong>empieza por esa letra</strong>, salvo cuando se avisa de que la <strong>contiene</strong>.</li>
+          <li>Escribe la respuesta y pulsa Intro. Las tildes no importan.</li>
+          <li><strong>Pasapalabra</strong> salta a la siguiente letra. Las letras saltadas vuelven al final de la vuelta.</li>
+          <li>La partida termina al responder todas las letras o al agotarse el tiempo.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="play" hidden>
+        <div class="clue-head">
+          <div class="clue-letter" id="clueLetter">A</div>
+          <div>
+            <p class="clue-mode" id="clueMode">Empieza por</p>
+            <p class="clue-count" id="clueCount"></p>
+          </div>
+        </div>
+        <p class="clue-text" id="clueText"></p>
+        <form class="field" id="form" autocomplete="off">
+          <label for="answer" style="position:absolute;left:-9999px">Tu respuesta</label>
+          <input id="answer" type="text" placeholder="Escribe tu respuesta" autocomplete="off" autocapitalize="off" spellcheck="false" disabled>
+          <button class="btn primary" type="submit" id="send" disabled>Responder</button>
+          <button class="btn" type="button" id="pass" disabled>Pasapalabra</button>
+        </form>
+        <p class="fb" id="fb" aria-live="polite"></p>
+        <div class="tally" id="tally"></div>
+      </section>
+
+      <section class="card" id="result" hidden>
+        <h2>Respuestas</h2>
+        <ul class="answers" id="answers"></ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+  var TOTAL = 150;
+  var WORDS = [
+    { l: "A", a: "asteroide",   clue: "Pequeño cuerpo rocoso que orbita el Sol; el cinturón principal reúne millones de ellos." },
+    { l: "B", a: "bola",      clue: "Cuando un cometa se acerca al Sol, se ve como una ___ brillante." },
+    { l: "C", a: "ceres",       clue: "El mayor objeto del cinturón; fue descubierto en la noche de Año Nuevo de 1801." },
+    { l: "D", a: "desviacion",  clue: "Cambio de trayectoria de un asteroide; la misión DART lo logró con Dimorphos en 2022." },
+    { l: "E", a: "enano",       clue: "Los planetas pequeños como Eris o Makemake se llaman planetas…" },
+    { l: "F", a: "fragmento",   clue: "Trozo que se desprende de un cuerpo mayor tras una colisión." },
+    { l: "G", a: "gravedad",    clue: "Fuerza de atracción que impidió que el material del cinturón llegara a formar un planeta." },
+    { l: "H", a: "hierro",      clue: "Metal más abundante en los asteroides metálicos, el mismo que lleva un clavo." },
+    { l: "I", a: "impacto",     clue: "Choque violento de un cuerpo contra otro, como los que abren cráteres." },
+    { l: "J", a: "jupiter",     clue: "Mayor planeta del Sistema Solar; su gravedad moldea el cinturón." },
+    { l: "K", a: "kilometro",   alts: ["kilometros", "km"], clue: "Mil metros: unidad con la que se mide el diámetro de un asteroide." },
+    { l: "L", a: "lunas",       alts: ["luna"], clue: "Satélites naturales que a veces orbitan un asteroide, como Dactyl alrededor de Ida." },
+    { l: "M", a: "marte",       clue: "Planeta rojo que marca el borde interior del cinturón." },
+    { l: "N", a: "niquel",      clue: "Metal que acompaña al hierro en los asteroides metálicos." },
+    { l: "O", a: "orbita",      clue: "Trayectoria curva que sigue un asteroide alrededor del Sol." },
+    { l: "P", a: "pluton", show: "Plutón",      clue: "Planeta enano con montañas y desiertos." },
+    { l: "Q", a: "quimica",     clue: "Ciencia que estudia la composición de la materia y permite saber de qué están hechos los asteroides." },
+    { l: "R", a: "resonancia",  clue: "Efecto por el que las órbitas sincronizadas con Júpiter dejan huecos, llamados huecos de Kirkwood." },
+    { l: "S", a: "sol",         clue: "Estrella alrededor de la cual orbita todo el cinturón." },
+    { l: "T", a: "telescopio",  clue: "Instrumento óptico para observar astros lejanos." },
+    { l: "U", a: "unidad",      clue: "La ___ astronómica equivale a la distancia media entre la Tierra y el Sol." },
+    { l: "V", a: "viaje",       clue: "Sinónimo de expedición." },
+    { l: "W", a: "newhorizons", show: "New Horizons", alts: ["newhorizon", "horizons"], mode: "contains",        clue: "Nombre de la primera nave espacial en llegar a Plutón." },
+    { l: "X", a: "exterior",    mode: "contains", clue: "Contrario de «interior»: el borde ___ del cinturón limita con la zona de los gigantes gaseosos." },
+    { l: "Y", a: "halley", mode: "contains",   clue: "Nombre del cometa que se pudo fotografiar cuando se acercó a la Tierra." },
+    { l: "Z", a: "zona",        clue: "Franja o región delimitada; el cinturón principal es una ___ de asteroides." }
+  ];
+  var N = WORDS.length;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = "http://www.w3.org/2000/svg";
+  var el = function (tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  };
+  var norm = function (s) {
+    return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+  };
+  var pl = function (n, one, many) { return n + " " + (n === 1 ? one : many); };
+  var fmt = function (s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+  function rng(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* Cada letra es una roca irregular y distinta. */
+  var nodes = [];
+  function buildWheel() {
+    var g = $("nodes"), R = 252, r = 26;
+    for (var i = 0; i < N; i++) {
+      var ang = -Math.PI / 2 + (i / N) * Math.PI * 2;
+      var x = 320 + R * Math.cos(ang), y = 320 + R * Math.sin(ang);
+      var rand = rng(97 + i * 31), pts = [], n = 11;
+      for (var k = 0; k < n; k++) {
+        var a = (k / n) * Math.PI * 2, rr = r * (0.86 + rand() * 0.22);
+        pts.push((rr * Math.cos(a)).toFixed(1) + "," + (rr * Math.sin(a)).toFixed(1));
+      }
+      var outer = el("g", { transform: "translate(" + x.toFixed(1) + " " + y.toFixed(1) + ")" });
+      var node = el("g", { "class": "node s-pending" });
+      node.appendChild(el("polygon", { "class": "rock", points: pts.join(" ") }));
+      var t = el("text", { "class": "glyph", y: 0, dy: ".36em" });
+      t.textContent = WORDS[i].l;
+      node.appendChild(t);
+      outer.appendChild(node);
+      g.appendChild(outer);
+      nodes.push({ outer: outer, node: node });
+    }
+  }
+
+  /* Dos anillos de polvo y gravilla que giran muy despacio fuera del rosco. */
+  function buildBelt() {
+    var rand = rng(2024);
+    function fill(id, count, rMin, rMax, sMin, sMax) {
+      var g = $(id);
+      for (var i = 0; i < count; i++) {
+        var a = rand() * Math.PI * 2, rr = rMin + rand() * (rMax - rMin);
+        g.appendChild(el("circle", {
+          cx: (320 + rr * Math.cos(a)).toFixed(1),
+          cy: (320 + rr * Math.sin(a)).toFixed(1),
+          r: (sMin + rand() * (sMax - sMin)).toFixed(2),
+          fill: "#c9b79a",
+          "fill-opacity": (0.18 + rand() * 0.5).toFixed(2)
+        }));
+      }
+    }
+    fill("belt1", 150, 288, 318, 0.7, 2.4);
+    fill("belt2", 45, 284, 319, 1.8, 4.2);
+  }
+
+  /* Estado */
+  var st = { status: "idle", idx: 0, marks: [], left: TOTAL, reason: "" };
+  var endAt = 0, timer = null;
+
+  function reset() {
+    st.marks = []; for (var i = 0; i < N; i++) st.marks.push("pending");
+    st.idx = 0; st.left = TOTAL; st.reason = "";
+  }
+
+  function counts() {
+    var ok = 0, ko = 0;
+    st.marks.forEach(function (m) { if (m === "ok") ok++; else if (m === "ko") ko++; });
+    return { ok: ok, ko: ko, pen: N - ok - ko };
+  }
+
+  function nextFrom(from) {
+    for (var k = 1; k <= N; k++) {
+      var j = (from + k) % N;
+      if (st.marks[j] === "pending" || st.marks[j] === "skipped") return j;
+    }
+    return -1;
+  }
+
+  function renderCore() {
+    var c = counts(), h;
+    if (st.status === "idle") {
+      h = '<div class="time" id="time">' + fmt(TOTAL) + '</div>' +
+          '<p class="coreline">26 letras para vaciar el cinturón</p>' +
+          '<button class="btn primary" id="startBtn" type="button">Empezar</button>';
+    } else if (st.status === "playing") {
+      h = '<div class="time' + (st.left <= 20 ? " low" : "") + '" id="time">' + fmt(st.left) + '</div>' +
+          '<p class="coreline">' + pl(c.ok, "acierto", "aciertos") + ' · ' + pl(c.ko, "fallo", "fallos") + '</p>';
+    } else {
+      h = '<p class="corehead">' + (st.reason === "time" ? "Se acabó el tiempo" : "Rosco completo") + '</p>' +
+          '<div class="score">' + c.ok + '<small>/' + N + '</small></div>' +
+          '<p class="coreline">' + pl(c.ko, "fallo", "fallos") + ' · ' + c.pen + ' sin responder</p>' +
+          '<button class="btn primary" id="againBtn" type="button">Jugar de nuevo</button>';
+    }
+    $("core").innerHTML = h;
+    var s = $("startBtn"); if (s) s.addEventListener("click", start);
+    var a = $("againBtn"); if (a) a.addEventListener("click", start);
+  }
+
+  function render() {
+    var playing = st.status === "playing";
+    for (var i = 0; i < N; i++) {
+      var cur = playing && i === st.idx;
+      nodes[i].node.setAttribute("class", "node s-" + st.marks[i] + (cur ? " cur" : ""));
+      if (cur) $("nodes").appendChild(nodes[i].outer);
+    }
+    var c = counts();
+    $("svg").setAttribute("aria-label", "Rosco: " + c.ok + " aciertos, " + c.ko + " fallos, " + c.pen + " pendientes");
+
+    $("rules").hidden = st.status !== "idle";
+    $("play").hidden = st.status !== "playing";
+    $("result").hidden = st.status !== "done";
+
+    if (playing) {
+      var w = WORDS[st.idx];
+      $("clueLetter").textContent = w.l;
+      $("clueMode").textContent = w.mode === "contains" ? "Contiene la " + w.l : "Empieza por " + w.l;
+      $("clueCount").textContent = w.a.length + " letras";
+      $("clueText").textContent = w.clue;
+      $("tally").innerHTML =
+        '<span><i class="d-ok"></i>' + pl(c.ok, "acierto", "aciertos") + '</span>' +
+        '<span><i class="d-ko"></i>' + pl(c.ko, "fallo", "fallos") + '</span>' +
+        '<span><i class="d-pen"></i>' + pl(c.pen, "pendiente", "pendientes") + '</span>';
+    }
+    if (st.status === "done") {
+      $("answers").innerHTML = WORDS.map(function (w, i) {
+        var cls = st.marks[i] === "ok" ? "ok" : st.marks[i] === "ko" ? "ko" : "pen";
+        var shown = w.show || (w.a.charAt(0).toUpperCase() + w.a.slice(1));
+        return '<li class="' + cls + '"><b>' + w.l + '</b><span>' + shown + '</span></li>';
+      }).join("");
+    }
+    ["answer", "send", "pass"].forEach(function (id) { $(id).disabled = !playing; });
+    renderCore();
+  }
+
+  function setFb(text, cls) { var f = $("fb"); f.textContent = text; f.className = "fb " + (cls || ""); }
+
+  function tickTime() {
+    st.left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    var t = $("time");
+    if (t) { t.textContent = fmt(st.left); t.className = "time" + (st.left <= 20 ? " low" : ""); }
+    if (st.left <= 0) finish("time");
+  }
+
+  function beginTimer() {
+    clearInterval(timer);
+    endAt = Date.now() + st.left * 1000;
+    timer = setInterval(tickTime, 250);
+  }
+
+  function start() {
+    reset();
+    st.status = "playing";
+    setFb("", "");
+    $("answer").value = "";
+    beginTimer();
+    render();
+    $("answer").focus();
+  }
+
+  function finish(reason) {
+    clearInterval(timer);
+    st.status = "done"; st.reason = reason;
+    render();
+  }
+
+  function advance() {
+    var n = nextFrom(st.idx);
+    if (n < 0) { finish("complete"); return; }
+    st.idx = n;
+    render();
+    $("answer").focus();
+  }
+
+  function accepted(w) { return [w.a].concat(w.alts || []).map(norm); }
+
+  function submit() {
+    if (st.status !== "playing") return;
+    var v = norm($("answer").value);
+    if (!v) return;
+    $("answer").value = "";
+    if (v === "pasapalabra" || v === "pp") { pass(); return; }
+    var ok = accepted(WORDS[st.idx]).indexOf(v) !== -1;
+    st.marks[st.idx] = ok ? "ok" : "ko";
+    setFb(ok ? "Correcto" : "No es esa palabra", ok ? "ok" : "ko");
+    advance();
+  }
+
+  function pass() {
+    if (st.status !== "playing") return;
+    if (st.marks[st.idx] === "pending") st.marks[st.idx] = "skipped";
+    setFb("Pasapalabra", "skip");
+    $("answer").value = "";
+    advance();
+  }
+
+  $("form").addEventListener("submit", function (e) { e.preventDefault(); submit(); });
+  $("pass").addEventListener("click", pass);
+
+  function boot(data) {
+    buildBelt();
+    buildWheel();
+    reset();
+    if (data && data.marks && data.marks.length === N) {
+      st.marks = data.marks; st.idx = data.idx || 0; st.left = data.left; st.reason = data.reason || "";
+      st.status = data.status || "idle";
+      if (st.status === "playing") beginTimer();
+    }
+    render();
+  }
+
+  if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
+    window.claude.hot.snapshot(function () {
+      return { status: st.status, idx: st.idx, marks: st.marks, left: st.left, reason: st.reason };
+    });
+  }
+  if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot);
+  else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
+</script>
+</body>
+</html>
